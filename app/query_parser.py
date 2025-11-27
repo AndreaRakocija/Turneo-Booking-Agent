@@ -64,7 +64,7 @@ class RuleBasedQueryParser(BookingQueryParser):
             q_lower,
         )
         if not month_year:
-            raise ValueError("Could not parse query (rule-based parser)")
+            raise ValueError("Could not parse query")
 
         month_name = month_year.group(1)
         year = int(month_year.group(2))
@@ -216,11 +216,22 @@ class OpenAIQueryParser(BookingQueryParser):
 
 class BookingQueryInterpreter:
 
-    def __init__(self, client: BookingQueryParser):
-        self.client = client
+    def __init__(self, primary: BookingQueryParser, fallback: BookingQueryParser | None = None):
+        if isinstance(primary, RuleBasedQueryParser):
+            self.primary = primary
+            self.fallback = None
+        else:
+            self.primary = primary
+            self.fallback = fallback or RuleBasedQueryParser()
 
     def interpret(self, query: str) -> QueryFilters:
-        parsed = self.client.parse_booking_query(query)
+        try:
+            parsed = self.primary.parse_booking_query(query)
+        except Exception:
+            if self.fallback:
+                parsed = self.fallback.parse_booking_query(query)
+            else:
+                raise
 
         try:
             start = date.fromisoformat(parsed["start_date"])
